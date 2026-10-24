@@ -192,5 +192,79 @@ onAuthStateChanged(auth,async user=>{
  }
 });
 getRedirectResult(auth).catch(error);
+</script><style>
+#profileTab {
+  position: fixed;
+  bottom: 15px;
+  right: 15px;
+  z-index: 9999;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 25px;
+  background: #6554e8;
+  color: white;
+  font-size: 15px;
+}
+
+#profilePanel {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: #101225;
+  color: white;
+  padding: 70px 25px 25px;
+  text-align: center;
+}
+
+#profilePanel img {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+</style>
+
+<button id="profileTab" style="display:none">👤 Profilim</button>
+
+<div id="profilePanel">
+  <h2>Profilim</h2>
+  <img id="profilePhoto" alt="Profil fotoğrafı" style="display:none">
+  <h3 id="profileName"></h3>
+  <p id="profileEmail"></p>
+  <button id="closeProfile">← Geri dön</button>
+</div>
+
+<script type="module">
+import {getAuth,onAuthStateChanged} from
+"https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+
+const auth=getAuth();
+
+const tab=document.getElementById("profileTab");
+const panel=document.getElementById("profilePanel");
+
+onAuthStateChanged(auth,user=>{
+  tab.style.display=user?"block":"none";
+  if(!user){
+    panel.style.display="none";
+    return;
+  }
+
+  document.getElementById("profileName").textContent=
+    user.displayName||"Ad soyad henüz girilmedi";
+
+  document.getElementById("profileEmail").textContent=user.email||"";
+
+  const photo=document.getElementById("profilePhoto");
+  photo.style.display=user.photoURL?"inline-block":"none";
+  if(user.photoURL)photo.src=user.photoURL;
+});
+
+tab.onclick=()=>panel.style.display="block";
+
+document.getElementById("closeProfile").onclick=()=>{
+  panel.style.display="none";
+};
 </script>
 </body></html>
