@@ -137,9 +137,22 @@ const firebaseConfig={
  messagingSenderId:"1015120167186",
  appId:"1:1015120167186:web:a1bdcf6be00ab0047bb3cb"
 };
+import {getFirestore,doc,getDoc,setDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 const app=initializeApp(firebaseConfig);
+const db=getFirestore(app);
 const auth=getAuth(app);
 const provider=new GoogleAuthProvider();
+async function ensureProfile(user){
+  const ref=doc(db,'users',user.uid);
+  const existing=await getDoc(ref);
+  if(!existing.exists()){
+    await setDoc(ref,{
+      displayName:user.displayName||user.email?.split('@')[0]||'LINGORA kullanıcısı',
+      photoURL:user.photoURL||'',
+      createdAt:serverTimestamp()
+    });
+  }
+}
 const el=id=>document.getElementById(id);
 const error=e=>{el('authError').textContent=({
  'auth/invalid-email':'E-posta adresini kontrol et.',
@@ -158,7 +171,7 @@ el('authGoogle').onclick=async()=>{el('authError').textContent='';try{
  await signInWithPopup(auth,provider);
 }catch(e){error(e)}};
 el('authLogout').onclick=async()=>{if(document.body.classList.contains('in-call')){alert('Çıkış yapmadan önce görüşmeyi bitir.');return}try{await signOut(auth)}catch(e){error(e)}};
-onAuthStateChanged(auth,user=>{
+onAuthStateChanged(auth,async user=>{
  el('authGate').style.display=user?'none':'block';
  el('authUser').style.display=user?'flex':'none';
  el('authUserName').textContent=user?(user.displayName||user.email||'Hesap açık'):'';
