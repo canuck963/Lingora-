@@ -176,6 +176,20 @@ onAuthStateChanged(auth,async user=>{
  el('authUser').style.display=user?'flex':'none';
  el('authUserName').textContent=user?(user.displayName||user.email||'Hesap açık'):'';
  if(!document.body.classList.contains('in-call'))el('setup').style.display=user?'block':'none';
+ if(user){
+   try{
+     await ensureProfile(user);
+     console.info('LINGORA: Kullanıcı profili Firestore üzerinde hazır.');
+   }catch(e){
+     console.error('LINGORA: Profil oluşturulamadı:',e);
+     el('authError').textContent='Profil kaydedilemedi: '+(e.code||e.message||'Bilinmeyen hata');
+     el('authError').style.display='block';
+     el('authError').style.padding='8px 20px';
+   }
+ }else{
+   el('authError').textContent='';
+   el('authError').style.padding='';
+ }
 });
 getRedirectResult(auth).catch(error);
 </script>
