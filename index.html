@@ -471,11 +471,14 @@ window.lingoraSpeakTranslation=(text,lang)=>{
 </div>
 
 <script type="module">
+import { , getApps, getApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {getAuth} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import {getFirestore,collection,addDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-const feedbackAuth=getAuth();
-const feedbackDb=getFirestore();
+const feedbackAuth = getAuth();
+const feedbackDb = getFirestore();
+
+
 
 document.getElementById('feedbackOpen').onclick=()=>{
   document.getElementById('feedbackPanel').style.display='block';
