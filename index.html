@@ -33,6 +33,9 @@ body.in-call .round{width:clamp(43px,12vw,53px);height:clamp(43px,12vw,53px);fon
 body.in-call .toasts{bottom:calc(env(safe-area-inset-bottom,0px) + 105px)}
 .toast{cursor:pointer;overflow-wrap:anywhere}
 @media(max-width:380px){body.in-call .controls{gap:6px}}
+/* Ana sayfa araçlarını görüntülü görüşme sırasında gizle. */
+body.in-call #feedbackOpen,
+body.in-call #adminOpen{display:none!important}
 </style>
 <style>
 .auth-gate{padding:24px 22px 10px;max-width:560px;margin:auto}
