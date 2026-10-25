@@ -474,8 +474,9 @@ window.lingoraSpeakTranslation=(text,lang)=>{
 import {getAuth} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import {getFirestore,collection,addDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-const feedbackAuth = getAuth();
-const feedbackDb = getFirestore();
+const feedbackAuth = getAuth(getApps().length ? getApp() : initializeApp(firebaseConfig));
+const feedbackDb = getFirestore(feedbackAuth.app);
+
 
 
 
