@@ -347,8 +347,8 @@ const userLabel=(data)=>data.displayName||'LINGORA kullanıcısı';
 async function lookupName(uid){const d=await getDoc(doc(dbSocial,'users',uid));return d.exists()?userLabel(d.data()):'Kullanıcı';}
 async function requestFriend(otherUid){
  const me=authSocial.currentUser;if(!me||me.uid===otherUid)return;
- const id=friendId(me.uid,otherUid),ref=doc(dbSocial,'friendRequests',id),snap=await getDoc(ref);
- if(snap.exists()){socialStatus('Bu kişiyle zaten bir istek veya arkadaşlık var.');return;}
+ const id=friendId(me.uid,otherUid),ref=doc(dbSocial,'friendRequests',id);
+
  await setDoc(ref,{from:me.uid,to:otherUid,status:'pending',createdAt:serverTimestamp()});
  socialStatus('✅ Arkadaşlık isteği gönderildi.');
 }
