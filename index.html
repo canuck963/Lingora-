@@ -451,7 +451,7 @@ window.lingoraSpeakTranslation=(text,lang)=>{
  try{const u=new SpeechSynthesisUtterance(text);u.lang=({tr:'tr-TR',uk:'uk-UA',ru:'ru-RU',en:'en-US'})[lang]||'tr-TR';u.rate=.95;window.speechSynthesis.speak(u)}catch(e){console.warn(e)}
 };
 </script>
-<button id="feedbackOpen" type="button" style="position:fixed;right:16px;bottom:90px;z-index:9999;padding:12px;border-radius:14px;background:#397bff;color:white;border:0">
+<button id="feedbackOpen" type="button" onclick="document.getElementById('feedbackPanel').style.display='block'" style="position:fixed;right:16px;bottom:90px;z-index:9999;padding:12px;border-radius:14px;background:#397bff;color:white;border:0">
   💬 Şikayet ve Öneri
 </button>
 
