@@ -76,6 +76,7 @@ if(data?.type!=='message' && data?.type!=='caption')return;
 if(typeof data.text!=='string' || !data.text.trim())return;
 const t=await translate(data.text.slice(0,1000),data.lang||'tr',$('lang').value);
 showMessage(t,data.text,data.type==='caption'?'🎙 Karşı taraf · Altyazı':'Karşı taraf');
+ if(data.type==='caption' && window.lingoraSpeakTranslation)window.lingoraSpeakTranslation(t,$('lang').value);
 if(data.type==='message')notifyIncoming();
 });conn.on('close',()=>{$('callTitle').textContent='● Karşı taraf ayrıldı'});conn.on('error',()=>{$('callTitle').textContent='● Mesaj bağlantısı hatası'})}
 function bindCall(c){mediaCall=c;c.on('stream',remote=>{$('remoteVideo').srcObject=remote;$('callTitle').textContent='● Görüşme devam ediyor'});c.on('close',()=>{$('remoteVideo').srcObject=null;$('callTitle').textContent='● Görüşme sona erdi'})}
@@ -211,12 +212,25 @@ body.in-call #profileTab{display:none!important}
  <div class="profile-content">
   <h2>Profilim</h2>
   <img id="profilePhoto" alt="Profil fotoğrafı" style="display:none">
+  <label for="profilePhotoInput">📸 Profil fotoğrafı seç (en fazla 2 MB)</label>
+  <input id="profilePhotoInput" type="file" accept="image/*">
+  <button id="savePhoto" type="button">Fotoğrafı kaydet</button>
   <h3 id="profileName">Ad soyad henüz girilmedi</h3>
   <label for="editFullName">Adınız ve soyadınız</label>
   <input id="editFullName" type="text" placeholder="Adınız ve soyadınız" autocomplete="name" maxlength="100">
   <button id="saveFullName" type="button">💾 Ad Soyadı Kaydet</button>
   <p id="profileSaveMessage" role="status" aria-live="polite"></p>
   <p id="profileEmail"></p>
+  <hr style="border:0;border-top:1px solid #314663;margin:24px 0">
+  <h3>👥 Arkadaşlar</h3>
+  <label for="friendSearch">Ad soyad ile kullanıcı ara</label>
+  <input id="friendSearch" placeholder="Örn: Ayşe Demir" maxlength="100">
+  <button id="findFriends" type="button">Kullanıcı ara</button>
+  <div id="friendResults"></div>
+  <h3>Gelen arkadaşlık istekleri</h3><div id="friendRequests"></div>
+  <h3>Arkadaş listem</h3><div id="friendList"></div>
+  <h3>📞 Gelen aramalar</h3><div id="incomingCalls"></div>
+  <p id="socialStatus" role="status"></p>
   <button id="closeProfile" type="button">← Geri dön</button>
  </div>
 </section>
@@ -265,6 +279,8 @@ onAuthStateChanged(auth,async user=>{
    const snap=await getDoc(doc(db,'users',uid));
    if(currentProfileUid!==uid)return;
    const storedName=snap.exists()?snap.data().displayName:'';
+   const storedPhoto=snap.exists()?snap.data().photoData:'';
+   if(storedPhoto){photo.src=storedPhoto;photo.style.display='inline-block';}
    if(typeof storedName==='string' && storedName.trim()){
      nameEl.textContent=storedName.trim();
      nameInput.value=storedName.trim();
@@ -300,5 +316,139 @@ saveBtn.addEventListener('click',async()=>{
    messageEl.textContent='❌ Kaydedilemedi: '+(e.code||e.message||'Bilinmeyen hata');
  }finally{saveBtn.disabled=false;}
 });
+</script>
+
+<style>
+#profilePanel .social-row{background:#182743;border:1px solid #344969;border-radius:13px;padding:12px;margin:9px 0;text-align:left;overflow-wrap:anywhere}
+#profilePanel .social-row button{font-size:13px;padding:9px;margin:5px 5px 0 0}
+#profilePanel #profilePhotoInput{font-size:13px}#profilePanel hr{opacity:.7}
+#profilePanel #socialStatus{color:#b7d1ff;overflow-wrap:anywhere}
+#voiceTranslationToggle{position:fixed;left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 15px);z-index:900;border:0;border-radius:20px;background:#273d65;color:#fff;padding:12px;font-size:13px}
+body.in-call #voiceTranslationToggle{bottom:calc(env(safe-area-inset-bottom,0px) + 155px);z-index:8}
+</style>
+<button id="voiceTranslationToggle" type="button" style="display:none">🔊 Çeviri sesi: Kapalı</button>
+<script type="module">
+import {getApp} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js';
+import {getAuth,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js';
+import {getFirestore,doc,getDoc,setDoc,collection,getDocs,query,where,onSnapshot,serverTimestamp,updateDoc} from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
+const authSocial=getAuth(getApp()),dbSocial=getFirestore(getApp());
+const $s=id=>document.getElementById(id);
+const socialStatus=t=>$s('socialStatus').textContent=t;
+let unsubscribers=[];
+const row=(container,label,actions=[])=>{
+ const div=document.createElement('div');div.className='social-row';
+ const title=document.createElement('div');title.textContent=label;div.append(title);
+ for(const [text,fn] of actions){const b=document.createElement('button');b.type='button';b.textContent=text;b.addEventListener('click',fn);div.append(b)}
+ container.append(div);
+};
+const fail=e=>socialStatus('❌ '+(e.code||e.message||String(e)));
+const friendId=(a,b)=>[a,b].sort().join('_');
+const userLabel=(data)=>data.displayName||'LINGORA kullanıcısı';
+async function lookupName(uid){const d=await getDoc(doc(dbSocial,'users',uid));return d.exists()?userLabel(d.data()):'Kullanıcı';}
+async function requestFriend(otherUid){
+ const me=authSocial.currentUser;if(!me||me.uid===otherUid)return;
+ const id=friendId(me.uid,otherUid),ref=doc(dbSocial,'friendRequests',id),snap=await getDoc(ref);
+ if(snap.exists()){socialStatus('Bu kişiyle zaten bir istek veya arkadaşlık var.');return;}
+ await setDoc(ref,{from:me.uid,to:otherUid,status:'pending',createdAt:serverTimestamp()});
+ socialStatus('✅ Arkadaşlık isteği gönderildi.');
+}
+$s('findFriends').onclick=async()=>{
+ const text=$s('friendSearch').value.trim().toLocaleLowerCase('tr');
+ const results=$s('friendResults');results.replaceChildren();
+ if(text.length<2){socialStatus('Arama için en az 2 harf yaz.');return;}
+ socialStatus('Aranıyor…');
+ try{
+  // Küçük prototip için kullanıcıların ilk 100 kaydını getirir.
+  const {limit}=await import('https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js');
+  const snaps=await getDocs(query(collection(dbSocial,'users'),limit(100)));
+  let found=0;
+  snaps.forEach(d=>{if(d.id===authSocial.currentUser?.uid)return;
+   const name=userLabel(d.data());if(!name.toLocaleLowerCase('tr').includes(text))return;
+   found++;row(results,name,[['➕ Arkadaş ekle',()=>requestFriend(d.id).catch(fail)]]);
+  });socialStatus(found?`${found} kullanıcı bulundu.`:'Eşleşen kullanıcı bulunamadı.');
+ }catch(e){fail(e)}
+};
+async function acceptFriend(requestDoc){
+ const me=authSocial.currentUser;if(!me||requestDoc.data().to!==me.uid)return;
+ await updateDoc(requestDoc.ref,{status:'accepted'});
+ socialStatus('✅ Arkadaşlık kabul edildi.');
+}
+async function callFriend(otherUid){
+ const me=authSocial.currentUser;if(!me)return;
+ const room='friend-'+crypto.randomUUID().slice(0,12);
+ const callRef=doc(collection(dbSocial,'calls'));
+ await setDoc(callRef,{from:me.uid,to:otherUid,room,status:'ringing',createdAt:serverTimestamp()});
+ // Caller can enter room immediately; callee accepts from their own device.
+ $s('room').value=room;
+ $s('profilePanel').style.display='none';
+ $s('profilePanel').setAttribute('aria-hidden','true');
+ socialStatus('Arama daveti gönderildi. Kamerayı aç ve görüşmeye katıl.');
+ $s('status').textContent='📞 Arama gönderildi. Kamerayı aç ve görüşmeye katıl.';
+ $s('setup').scrollIntoView({behavior:'smooth'});
+}
+function listenSocial(user){
+ for(const u of unsubscribers)u();unsubscribers=[];
+ if(!user){$s('voiceTranslationToggle').style.display='none';return;}
+ $s('voiceTranslationToggle').style.display='block';
+ const me=user.uid;
+ const listen=(q,cb)=>unsubscribers.push(onSnapshot(q,cb,e=>fail(e)));
+ listen(query(collection(dbSocial,'friendRequests'),where('to','==',me)),async snaps=>{
+  const box=$s('friendRequests');box.replaceChildren();
+  for(const d of snaps.docs.filter(d=>d.data().status==='pending')){
+   const name=await lookupName(d.data().from).catch(()=> 'Kullanıcı');
+   row(box,name,[['✅ Kabul et',()=>acceptFriend(d).catch(fail)],['Reddet',()=>updateDoc(d.ref,{status:'declined'}).catch(fail)]]);
+  }
+ });
+ const requests=new Map();
+ const redraw=async()=>{
+  const box=$s('friendList');box.replaceChildren();
+  const accepted=[...requests.values()].filter(d=>d.status==='accepted');
+  const ids=[...new Set(accepted.map(d=>d.from===me?d.to:d.from))];
+  for(const uid of ids){const name=await lookupName(uid).catch(()=> 'Kullanıcı');
+   row(box,name,[['📞 Görüntülü ara',()=>callFriend(uid).catch(fail)]]);
+  }
+ };
+ const refresh=(snaps,side)=>{for(const [id,d] of requests)if(d.side===side)requests.delete(id);
+  snaps.forEach(d=>requests.set(d.id,{...d.data(),side}));redraw().catch(fail)};
+ listen(query(collection(dbSocial,'friendRequests'),where('from','==',me)),s=>refresh(s,'from'));
+ listen(query(collection(dbSocial,'friendRequests'),where('to','==',me)),s=>refresh(s,'to'));
+ listen(query(collection(dbSocial,'calls'),where('to','==',me)),async snaps=>{
+  const box=$s('incomingCalls');box.replaceChildren();
+  for(const d of snaps.docs.filter(d=>d.data().status==='ringing')){
+   const caller=await lookupName(d.data().from).catch(()=> 'Kullanıcı');
+   row(box,`📞 ${caller} arıyor`,[
+    ['✅ Kabul et',async()=>{try{await updateDoc(d.ref,{status:'accepted'});$s('room').value=d.data().room;$s('profilePanel').style.display='none';$s('profilePanel').setAttribute('aria-hidden','true');$s('status').textContent='Arama kabul edildi. Kamerayı aç ve görüşmeye katıl.';}catch(e){fail(e)}}],
+    ['❌ Reddet',()=>updateDoc(d.ref,{status:'declined'}).catch(fail)]
+   ]);
+  }
+ });
+}
+onAuthStateChanged(authSocial,listenSocial);
+$s('savePhoto').onclick=async()=>{
+ const user=authSocial.currentUser,file=$s('profilePhotoInput').files[0];
+ if(!user||!file){socialStatus('Önce fotoğraf seç.');return;}
+ if(file.size>2*1024*1024){socialStatus('Fotoğraf 2 MB altında olmalı.');return;}
+ try{
+  const bitmap=await createImageBitmap(file);
+  const canvas=document.createElement('canvas');canvas.width=160;canvas.height=160;
+  const ctx=canvas.getContext('2d');
+  const side=Math.min(bitmap.width,bitmap.height),x=(bitmap.width-side)/2,y=(bitmap.height-side)/2;
+  ctx.drawImage(bitmap,x,y,side,side,0,0,160,160);bitmap.close();
+  const data=canvas.toDataURL('image/jpeg',.72);
+  await setDoc(doc(dbSocial,'users',user.uid),{photoData:data},{merge:true});
+  $s('profilePhoto').src=data;$s('profilePhoto').style.display='inline-block';
+  socialStatus('✅ Fotoğraf kaydedildi.');
+ }catch(e){fail(e)}
+};
+let speakOn=false;
+$s('voiceTranslationToggle').onclick=()=>{
+ speakOn=!speakOn;
+ $s('voiceTranslationToggle').textContent=speakOn?'🔊 Çeviri sesi: Açık':'🔇 Çeviri sesi: Kapalı';
+ if(speakOn&&window.speechSynthesis){window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance('Sesli çeviri açık');utter.lang='tr-TR';window.speechSynthesis.speak(utter)}
+};
+window.lingoraSpeakTranslation=(text,lang)=>{
+ if(!speakOn||!window.speechSynthesis||!text||text.startsWith('⚠'))return;
+ try{const u=new SpeechSynthesisUtterance(text);u.lang=({tr:'tr-TR',uk:'uk-UA',ru:'ru-RU',en:'en-US'})[lang]||'tr-TR';u.rate=.95;window.speechSynthesis.speak(u)}catch(e){console.warn(e)}
+};
 </script>
 </body></html>
