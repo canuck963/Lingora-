@@ -192,98 +192,113 @@ onAuthStateChanged(auth,async user=>{
  }
 });
 getRedirectResult(auth).catch(error);
-</script><style>
-#profileTab {
-  position: fixed;
-  bottom: 15px;
-  right: 15px;
-  z-index: 9999;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 25px;
-  background: #6554e8;
-  color: white;
-  font-size: 15px;
-}
-
-#profilePanel {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 9998;
-  background: #101225;
-  color: white;
-  padding: 70px 25px 25px;
-  text-align: center;
-}
-
-#profilePanel img {
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  object-fit: cover;
-}
+</script>
+<style>
+/* LINGORA · Profil paneli */
+#profileTab{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 15px);right:15px;z-index:900;padding:12px 20px;border:0;border-radius:25px;background:#6554e8;color:#fff;font-size:15px;box-shadow:0 5px 18px #0005}
+body.in-call #profileTab{display:none!important}
+#profilePanel{display:none;position:fixed;inset:0;z-index:1000;background:#101225;color:white;padding:calc(env(safe-area-inset-top,0px) + 50px) 24px 30px;text-align:center;overflow-y:auto}
+#profilePanel .profile-content{max-width:440px;margin:0 auto}
+#profilePanel img{width:90px;height:90px;border-radius:50%;object-fit:cover}
+#profilePanel input{width:100%;margin:12px auto 0;max-width:360px}
+#profilePanel button{border:0;border-radius:12px;padding:13px 18px;margin-top:12px;background:#6554e8;color:white}
+#profilePanel #closeProfile{background:#253c60}
+#profileSaveMessage{min-height:22px;overflow-wrap:anywhere}
+#profileEmail{color:#b5c7e6;overflow-wrap:anywhere}
 </style>
-
-<button id="profileTab" style="display:none">👤 Profilim</button>
-
-<div id="profilePanel">
+<button id="profileTab" type="button" style="display:none">👤 Profilim</button>
+<section id="profilePanel" aria-label="Profilim" aria-hidden="true">
+ <div class="profile-content">
   <h2>Profilim</h2>
   <img id="profilePhoto" alt="Profil fotoğrafı" style="display:none">
-  <h3 id="profileName"></h3>
- <input id="editFullName"
-  type="text"
-  placeholder="Adınız ve soyadınız"
-  autocomplete="name"
-  style="padding:12px;border-radius:10px;width:85%;max-width:300px">
-
-<button id="saveFullName"
-  style="padding:12px;margin-top:10px;border-radius:10px">
-  💾 Ad Soyadı Kaydet
-</button>
-
-<p id="profileSaveMessage"></p>
+  <h3 id="profileName">Ad soyad henüz girilmedi</h3>
+  <label for="editFullName">Adınız ve soyadınız</label>
+  <input id="editFullName" type="text" placeholder="Adınız ve soyadınız" autocomplete="name" maxlength="100">
+  <button id="saveFullName" type="button">💾 Ad Soyadı Kaydet</button>
+  <p id="profileSaveMessage" role="status" aria-live="polite"></p>
   <p id="profileEmail"></p>
-  <button id="closeProfile">← Geri dön</button>
-</div>
-
+  <button id="closeProfile" type="button">← Geri dön</button>
+ </div>
+</section>
 <script type="module">
-import {getAuth,onAuthStateChanged} from
-"https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import {getApp} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import {getAuth,onAuthStateChanged,updateProfile} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import {getFirestore,doc,getDoc,setDoc} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
-const auth=getAuth();
+const auth=getAuth(getApp());
+const db=getFirestore(getApp());
+const tab=document.getElementById('profileTab');
+const panel=document.getElementById('profilePanel');
+const nameEl=document.getElementById('profileName');
+const nameInput=document.getElementById('editFullName');
+const messageEl=document.getElementById('profileSaveMessage');
+const saveBtn=document.getElementById('saveFullName');
+const photo=document.getElementById('profilePhoto');
+let currentProfileUid=null;
 
-const tab=document.getElementById("profileTab");
-const panel=document.getElementById("profilePanel");
+function openProfile(){
+ if(!auth.currentUser || document.body.classList.contains('in-call'))return;
+ panel.style.display='block';
+ panel.setAttribute('aria-hidden','false');
+}
+function closeProfile(){
+ panel.style.display='none';
+ panel.setAttribute('aria-hidden','true');
+ messageEl.textContent='';
+}
+tab.addEventListener('click',openProfile);
+document.getElementById('closeProfile').addEventListener('click',closeProfile);
 
-onAuthStateChanged(auth,user=>{
-  tab.style.display=user?"block":"none";
-  if(!user){
-    panel.style.display="none";
-    return;
-  }
-
-  document.getElementById("profileName").textContent=
-    user.displayName||"Ad soyad henüz girilmedi";
-
-  document.getElementById("profileEmail").textContent=user.email||"";
-
-  const photo=document.getElementById("profilePhoto");
-  photo.style.display=user.photoURL?"inline-block":"none";
-  if(user.photoURL)photo.src=user.photoURL;
+onAuthStateChanged(auth,async user=>{
+ currentProfileUid=user?.uid||null;
+ tab.style.display=user?'block':'none';
+ if(!user){closeProfile();nameEl.textContent='Ad soyad henüz girilmedi';nameInput.value='';return;}
+ const uid=user.uid;
+ const defaultName=user.displayName||'';
+ nameEl.textContent=defaultName||'Ad soyad henüz girilmedi';
+ nameInput.value=defaultName;
+ document.getElementById('profileEmail').textContent=user.email||'';
+ photo.style.display=user.photoURL?'inline-block':'none';
+ if(user.photoURL)photo.src=user.photoURL;
+ // Firebase Authentication adını değil, Firestore'daki güncel profil adını esas al.
+ try{
+   const snap=await getDoc(doc(db,'users',uid));
+   if(currentProfileUid!==uid)return;
+   const storedName=snap.exists()?snap.data().displayName:'';
+   if(typeof storedName==='string' && storedName.trim()){
+     nameEl.textContent=storedName.trim();
+     nameInput.value=storedName.trim();
+   }
+ }catch(e){
+   console.warn('Profil okunamadı:',e);
+   messageEl.textContent='Profil bilgisi okunamadı: '+(e.code||e.message);
+ }
 });
 
-tab.onclick=()=>panel.style.display="block";
-
-document.getElementById("closeProfile").onclick=()=>{
-  panel.style.display="none";
-};
-document.getElementById("closeProfile").onclick=()=>{
-  panel.style.display="none";
-};
-document.getElementById("saveFullName").onclick=()=>{
-  document.getElementById("profileSaveMessage").textContent=
-    "✅ Buton çalışıyor!";
-};
+saveBtn.addEventListener('click',async()=>{
+ const user=auth.currentUser;
+ const name=nameInput.value.trim().replace(/\s+/g,' ');
+ if(!user){messageEl.textContent='Önce giriş yapmalısınız.';return;}
+ if(name.length<3 || name.length>100 || name.split(' ').length<2){
+   messageEl.textContent='Lütfen adınızı ve soyadınızı girin.';
+   return;
+ }
+ saveBtn.disabled=true;
+ messageEl.textContent='Kaydediliyor…';
+ try{
+   // Kullanıcının yalnızca kendi belgesini günceller; diğer alanları korur.
+   await setDoc(doc(db,'users',user.uid),{displayName:name},{merge:true});
+   nameEl.textContent=name;
+   // Auth güncellemesi ayrıca denenir; Firestore kaydı başarılıysa isim kaybolmaz.
+   try{await updateProfile(user,{displayName:name});}
+   catch(authError){console.warn('Auth görünen ad güncellenemedi:',authError);}
+   const topName=document.getElementById('authUserName');
+   if(topName)topName.textContent=name;
+   messageEl.textContent='✅ Ad soyad kaydedildi!';
+ }catch(e){
+   console.error('Profil kaydedilemedi:',e);
+   messageEl.textContent='❌ Kaydedilemedi: '+(e.code||e.message||'Bilinmeyen hata');
+ }finally{saveBtn.disabled=false;}
+});
 </script>
 </body></html>
