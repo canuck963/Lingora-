@@ -464,35 +464,43 @@ window.lingoraSpeakTranslation=(text,lang)=>{
       <option value="bug">🐞 Hata Bildirimi</option>
     </select>
     <textarea id="feedbackMessage" maxlength="2000" placeholder="Mesajını yaz..." style="width:100%;height:140px;padding:12px"></textarea>
-     <button id="feedbackSend" type="button" onclick="alert('GÖNDER TIKLANDI')">📩 Gönder</button>
+     <button id="feedbackSend" type="button" >📩 Gönder</button>
     <button id="feedbackClose" type="button" onclick="document.getElementById('feedbackPanel').style.display='none'">Kapat</button>
-    <p id="feedbackStatus"></p>
+    <p id="feedbackStatus" role="status" aria-live="polite" style="min-height:28px;overflow-wrap:anywhere"></p>
   </div>
 </div>
 
 <script type="module">
-import {getAuth} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import {getFirestore,collection,addDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
-alert('LINGORA TEST');
-const feedbackAuth = getAuth(getApps().length ? getApp() : initializeApp(firebaseConfig));
-const feedbackDb = getFirestore(feedbackAuth.app);
+import {getApp} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import {getAuth} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import {getFirestore,collection,addDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
+const feedbackApp=getApp();
+const feedbackAuth=getAuth(feedbackApp);
+const feedbackDb=getFirestore(feedbackApp);
+const feedbackPanel=document.getElementById('feedbackPanel');
+const feedbackStatus=document.getElementById('feedbackStatus');
+const feedbackSend=document.getElementById('feedbackSend');
 
-
-
+function feedbackNotice(text,isError=false){
+  feedbackStatus.textContent=text;
+  feedbackStatus.style.color=isError?'#ffb7c0':'#a5f3c0';
+}
 document.getElementById('feedbackOpen').onclick=()=>{
-  document.getElementById('feedbackPanel').style.display='block';
+  feedbackPanel.style.display='block';
+  feedbackNotice('');
 };
 document.getElementById('feedbackClose').onclick=()=>{
-  document.getElementById('feedbackPanel').style.display='none';
+  feedbackPanel.style.display='none';
 };
-document.getElementById('feedbackSend').onclick=async()=>{
- alert('GÖNDER BUTONU ÇALIŞTI');
+feedbackSend.onclick=async()=>{
   const user=feedbackAuth.currentUser;
   const message=document.getElementById('feedbackMessage').value.trim();
-  const status=document.getElementById('feedbackStatus');
-  if(!user){status.textContent='Önce giriş yapmalısın.';return;}
-  if(!message){status.textContent='Lütfen mesaj yaz.';return;}
+  if(!user){feedbackNotice('❌ Göndermek için önce hesabına giriş yap.',true);return;}
+  if(!message){feedbackNotice('❌ Lütfen bir mesaj yaz.',true);return;}
+  feedbackSend.disabled=true;
+  feedbackSend.textContent='⏳ Gönderiliyor…';
+  feedbackNotice('Mesaj Firebase’e kaydediliyor…');
   try{
     await addDoc(collection(feedbackDb,'feedback'),{
       userId:user.uid,
@@ -500,12 +508,17 @@ document.getElementById('feedbackSend').onclick=async()=>{
       message,
       createdAt:serverTimestamp()
     });
-    status.textContent='✅ Bildirimin gönderildi!';
-   alert('✅ FIREBASE KAYDETTİ!');
     document.getElementById('feedbackMessage').value='';
+    feedbackNotice('✅ Bildirimin başarıyla gönderildi!');
   }catch(e){
-   alert('❌ FIREBASE HATASI: '+e.message);
-    status.textContent='❌ Gönderilemedi: '+e.message;
+    console.error('LINGORA geri bildirim gönderilemedi:',e);
+    const detail=e.code==='permission-denied'
+      ? 'Firestore izinleri eksik. feedback koleksiyonu için güvenlik kuralı eklenmeli.'
+      : (e.message||e.code||'Bilinmeyen hata');
+    feedbackNotice('❌ Gönderilemedi: '+detail,true);
+  }finally{
+    feedbackSend.disabled=false;
+    feedbackSend.textContent='📩 Gönder';
   }
 };
 </script>
