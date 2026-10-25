@@ -464,7 +464,7 @@ window.lingoraSpeakTranslation=(text,lang)=>{
       <option value="bug">🐞 Hata Bildirimi</option>
     </select>
     <textarea id="feedbackMessage" maxlength="2000" placeholder="Mesajını yaz..." style="width:100%;height:140px;padding:12px"></textarea>
-     <button id="feedbackSend" type="button">📨 Gönder</button>
+     <button id="feedbackSend" type="button" onclick="alert('GÖNDER TIKLANDI')">📩 Gönder</button>
     <button id="feedbackClose" type="button" onclick="document.getElementById('feedbackPanel').style.display='none'">Kapat</button>
     <p id="feedbackStatus"></p>
   </div>
