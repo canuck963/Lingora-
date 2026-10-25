@@ -522,4 +522,90 @@ feedbackSend.onclick=async()=>{
   }
 };
 </script>
+ <button id="adminOpen" type="button" style="display:none;position:fixed;left:12px;bottom:90px;z-index:10002;background:#2563eb;color:white;padding:12px;border:0;border-radius:12px">
+🛡️ Yönetim
+</button>
+
+<div id="adminPanel" style="display:none;position:fixed;inset:0;z-index:10003;background:#101827;color:white;padding:20px;overflow:auto">
+  <h2>🛡️ LINGORA Yönetim Paneli</h2>
+  <button id="adminClose">Kapat</button>
+  <button id="adminRefresh">🔄 Yenile</button>
+  <p id="adminStatus"></p>
+  <h3>📩 Şikâyet ve Öneriler</h3>
+  <div id="adminMessages"></div>
+  <h3>👥 Kullanıcılar</h3>
+  <div id="adminUsers"></div>
+</div>
+
+<script type="module">
+import {getApp} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import {getAuth,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import {getFirestore,collection,getDocs,query,orderBy,limit} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+const auth=getAuth(getApp());
+const db=getFirestore(getApp());
+const ADMIN_UID="zLKJlLk3PJeYHRavs33bNsk5LXp2";
+
+const open=document.getElementById("adminOpen");
+const panel=document.getElementById("adminPanel");
+const status=document.getElementById("adminStatus");
+
+onAuthStateChanged(auth,user=>{
+  const admin=user?.uid===ADMIN_UID;
+  open.style.display=admin?"block":"none";
+  if(!admin)panel.style.display="none";
+});
+
+document.getElementById("adminClose").onclick=()=>{
+  panel.style.display="none";
+};
+
+open.onclick=()=>{
+  panel.style.display="block";
+  loadAdmin();
+};
+
+document.getElementById("adminRefresh").onclick=loadAdmin;
+
+async function loadAdmin(){
+  if(auth.currentUser?.uid!==ADMIN_UID)return;
+
+  status.textContent="⏳ Yükleniyor...";
+
+  const messages=document.getElementById("adminMessages");
+  const users=document.getElementById("adminUsers");
+
+  messages.replaceChildren();
+  users.replaceChildren();
+
+  const results=await Promise.allSettled([
+    getDocs(query(collection(db,"feedback"),orderBy("createdAt","desc"),limit(100))),
+    getDocs(query(collection(db,"users"),limit(100)))
+  ]);
+
+  if(results[0].status==="fulfilled"){
+    results[0].value.forEach(doc=>{
+      const data=doc.data();
+      const box=document.createElement("p");
+      box.textContent=`${data.category}: ${data.message}`;
+      messages.appendChild(box);
+    });
+  }else{
+    messages.textContent="❌ Bildirimleri okuma izni yok.";
+  }
+
+  if(results[1].status==="fulfilled"){
+    results[1].value.forEach(doc=>{
+      const data=doc.data();
+      const box=document.createElement("p");
+      box.textContent=data.displayName||doc.id;
+      users.appendChild(box);
+    });
+  }else{
+    users.textContent="❌ Kullanıcılar yüklenemedi.";
+  }
+
+  status.textContent="✅ Yükleme tamamlandı.";
+}
+</script>
 </body></html>
