@@ -501,8 +501,10 @@ document.getElementById('feedbackSend').onclick=async()=>{
       createdAt:serverTimestamp()
     });
     status.textContent='✅ Bildirimin gönderildi!';
+   alert('✅ FIREBASE KAYDETTİ!');
     document.getElementById('feedbackMessage').value='';
   }catch(e){
+   alert('❌ FIREBASE HATASI: '+e.message);
     status.textContent='❌ Gönderilemedi: '+e.message;
   }
 };
