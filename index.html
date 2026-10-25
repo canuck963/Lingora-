@@ -487,6 +487,7 @@ document.getElementById('feedbackClose').onclick=()=>{
   document.getElementById('feedbackPanel').style.display='none';
 };
 document.getElementById('feedbackSend').onclick=async()=>{
+ alert('GÖNDER BUTONU ÇALIŞTI');
   const user=feedbackAuth.currentUser;
   const message=document.getElementById('feedbackMessage').value.trim();
   const status=document.getElementById('feedbackStatus');
