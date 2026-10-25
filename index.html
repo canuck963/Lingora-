@@ -451,4 +451,56 @@ window.lingoraSpeakTranslation=(text,lang)=>{
  try{const u=new SpeechSynthesisUtterance(text);u.lang=({tr:'tr-TR',uk:'uk-UA',ru:'ru-RU',en:'en-US'})[lang]||'tr-TR';u.rate=.95;window.speechSynthesis.speak(u)}catch(e){console.warn(e)}
 };
 </script>
+<button id="feedbackOpen" type="button" style="position:fixed;right:16px;bottom:90px;z-index:9999;padding:12px;border-radius:14px;background:#397bff;color:white;border:0">
+  💬 Şikayet ve Öneri
+</button>
+
+<div id="feedbackPanel" style="display:none;position:fixed;inset:0;background:#101827ee;z-index:10000;padding:24px;overflow:auto">
+  <div style="max-width:440px;margin:60px auto;color:white">
+    <h2>💬 Şikayet ve Öneriler</h2>
+    <select id="feedbackCategory" style="width:100%;padding:14px;margin:12px 0">
+      <option value="suggestion">💡 Öneri</option>
+      <option value="complaint">⚠️ Şikayet</option>
+      <option value="bug">🐞 Hata Bildirimi</option>
+    </select>
+    <textarea id="feedbackMessage" maxlength="2000" placeholder="Mesajını yaz..." style="width:100%;height:140px;padding:12px"></textarea>
+    <button id="feedbackSend" type="button">📨 Gönder</button>
+    <button id="feedbackClose" type="button">Kapat</button>
+    <p id="feedbackStatus"></p>
+  </div>
+</div>
+
+<script type="module">
+import {getAuth} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import {getFirestore,collection,addDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+
+const feedbackAuth=getAuth();
+const feedbackDb=getFirestore();
+
+document.getElementById('feedbackOpen').onclick=()=>{
+  document.getElementById('feedbackPanel').style.display='block';
+};
+document.getElementById('feedbackClose').onclick=()=>{
+  document.getElementById('feedbackPanel').style.display='none';
+};
+document.getElementById('feedbackSend').onclick=async()=>{
+  const user=feedbackAuth.currentUser;
+  const message=document.getElementById('feedbackMessage').value.trim();
+  const status=document.getElementById('feedbackStatus');
+  if(!user){status.textContent='Önce giriş yapmalısın.';return;}
+  if(!message){status.textContent='Lütfen mesaj yaz.';return;}
+  try{
+    await addDoc(collection(feedbackDb,'feedback'),{
+      userId:user.uid,
+      category:document.getElementById('feedbackCategory').value,
+      message,
+      createdAt:serverTimestamp()
+    });
+    status.textContent='✅ Bildirimin gönderildi!';
+    document.getElementById('feedbackMessage').value='';
+  }catch(e){
+    status.textContent='❌ Gönderilemedi: '+e.message;
+  }
+};
+</script>
 </body></html>
